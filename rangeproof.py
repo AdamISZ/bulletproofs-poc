@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 from __future__ import print_function
+"""Partial implementation (for learning/POC) of:
+https://eprint.iacr.org/2017/1066 ("Bulletproofs").
+Only single rangeproofs, not aggregated.
+Only handles bitlengths that are powers of 2 up to 64.
+"""
 import os
 import sys
 import hashlib
@@ -39,25 +44,21 @@ class RangeProof(object):
 
     def __init__(self, bitlength):
         self.fsstate = ""
+        assert bitlength in [2, 4, 8, 16, 32, 64], "Bitlength must be power of 2 <= 64"
         self.bitlength = bitlength
 
-    def generate_proof(self, value, Vblind):
-        """Given the value value,
-        construct a commitment to (value in bits as vector, that vector - 1^n),
-        called aL and aR (this is constructed so that hadamard(aL, aR) = 0^n),
-        with blinding, and then construct a second commitment to equal-length
-        blinding vectors sL, sR.
-        Resulting 2 commitments are called self.A and self.S
+    def generate_proof(self, value):
+        """Given the value value, follow the algorithm laid out
+        on p.16, 17 (section 4.2) of paper for prover side.
         """
         self.fsstate = ""
         self.value = value
-        self.gamma = Vblind
+        self.gamma = os.urandom(32)
         pc = PC(encode(self.value, 256, minlen=32), blinding=self.gamma)
         self.V = pc.get_commitment()
         self.aL = Vector(value, self.bitlength)
         self.aR = self.aL.subtract([1] * self.bitlength)
         assert self.aL.hadamard(self.aR).v == Vector([0]*self.bitlength).v
-        print(self.aL.inner_product(PowerVector(2, self.bitlength)))
         assert self.aL.inner_product(PowerVector(2, self.bitlength)) == value
         self.alpha = self.get_blinding_value()
         self.A = IPC(self.aL.v, self.aR.v, vtype="int", u=getNUMS(255).serialize())
@@ -72,7 +73,7 @@ class RangeProof(object):
         self.y, self.z = self.fiat_shamir([self.V, self.A.P, self.S.P])
         self.z2 = (self.z * self.z) % N
         self.zv = Vector([self.z] * self.bitlength)
-        #construct l(X) and r(X) coeffcients; l[0] = constant term, l[1] linear term,
+        #construct l(X) and r(X) coefficients; l[0] = constant term, l[1] linear term,
         #same for r(X)
         self.l = []
         self.l.append(self.aL.subtract(self.zv))
@@ -110,27 +111,8 @@ class RangeProof(object):
         self.yinv = modinv(self.y, N)
         for i in range(1, self.bitlength + 1):
             self.hprime.append(ecmult(pow(self.yinv, i-1, N), self.A.h[i-1], False))
-        #self.P = self.A.P
-        #self.P = ecadd_pubkeys([ecmult(self.x_1, self.S.P, False), self.P], False)
-        #now add g*^(-z)
-        #for i in range(self.bitlength):
-        #    self.P = ecadd_pubkeys([ecmult(-self.z % N, getNUMS(i+1).serialize(),
-        #                                   False), self.P], False)
-        #self.zynz22n = self.yn.scalar_mult(self.z).add(PowerVector(2,
-        #                                    self.bitlength).scalar_mult(self.z2))
-        #for i in range(self.bitlength):
-        #    self.P = ecadd_pubkeys([ecmult(self.zynz22n.v[i], self.hprime[i],
-        #                                   False), self.P], False)
         self.uchallenge = self.fiat_shamir([self.tau_x, self.mu, self.t], nret=1)[0]
         self.U = ecmult(self.uchallenge, getG(True), False)
-        #self.P = ecadd_pubkeys([ecmult(self.t, self.U, False), self.P], False)
-        #input to inner product proof is P.h^-(mu)
-        #self.P = ecadd_pubkeys([self.P, ecmult(-self.mu % N, getNUMS(255).serialize(),
-        #                                                    False)], False)
-        #we now have:
-        #P = A + xS -zG* + (y*^(1-i))H'* -mu H + tU (with some notation abuse)
-        #The verifier will replace the verification in (60), (63) with the inner product
-        #verify.
         #On the prover side, need to construct an inner product argument:
         self.iproof = IPC(self.lx.v, self.rx.v, vtype="int", h=self.hprime, u=self.U)
         self.proof = self.iproof.generate_proof()
@@ -148,6 +130,7 @@ class RangeProof(object):
         components of the inner product proof. The exception is L, R which are
         arrays of EC points, length log_2(bitlength).
         So total size of proof is: 33*4 + 32*3 + (32*2 + 33*2*log_2(bitlength)).
+        This agrees with the last sentence of 4.2 in the paper.
         """
         a, b, Ls, Rs = self.proof
         tau_x_ser, mu_ser, t_ser = [encode(x, 256, 32) for x in [self.tau_x, self.mu, self.t]]
@@ -236,6 +219,10 @@ class RangeProof(object):
         self.U = ecmult(self.uchallenge, getG(True), False)
         self.P = ecadd_pubkeys([ecmult(t, self.U, False), self.P], False)
         #P should now be : A + xS + -zG* + (zy^n+z^2.2^n)H'* + tU
+        #One can show algebraically (the working is omitted from the paper)
+        #that this will be the same as an inner product commitment to
+        #(lx, rx) vectors (whose inner product is t), thus the variable 'proof'
+        #can be passed into the IPC verify call, which should pass.
         #input to inner product proof is P.h^-(mu)
         self.Pprime = ecadd_pubkeys([self.P, ecmult(-mu % N, getNUMS(255).serialize(),
                                                     False)], False)
@@ -257,7 +244,7 @@ def run_test_rangeproof(value, rangebits):
         print("Value is NOT in range; we want verification to FAIL.")
         fail = True
     rp = RangeProof(rangebits)
-    rp.generate_proof(value, os.urandom(32))
+    rp.generate_proof(value)
     proof = rp.get_proof_serialized()
     #now simulating: the serialized proof passed to the validator/receiver;
     #note that it is tacitly assumed that in the expected application (CT
