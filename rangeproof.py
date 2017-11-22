@@ -256,6 +256,7 @@ def run_test_rangeproof(value, rangebits):
     #Note this is a new RangeProof object:
     rp2 = RangeProof(rangebits)
     A, S, T1, T2, tau_x, mu, t, iproof = rp2.deserialize_proof(proof)
+    print("Now attempting to verify a proof in range: 0 -", 2**rangebits)
     if not rp2.verify(A, S, T1, T2, tau_x, mu, t, iproof, rp.V):
         if not fail:
             print('Rangeproof should have verified but is invalid; bug.')

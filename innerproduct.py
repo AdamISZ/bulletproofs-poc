@@ -70,7 +70,6 @@ class IPC(VPC):
         So the prover must provide (L[], R[], a', b') as output to the verifier.
         The verifier checks against the pre-known P and c.
         """
-        print("**STARTING GPR with n=", n, "***")
         if n == 1:
             #return the tuple: a', b', L[], R[]
             #note total size is 2 * scalar_size + log(n) * 2 * point_size
@@ -128,12 +127,11 @@ class IPC(VPC):
         recursion but here, unlike for the proof function, only used in the final
         step.
         """
-        print("***STARTING VPR With n=", n, "***")
         if n == 1:
             Pprime = IPC([a], [b], g=g, h=h, u=self.U).get_commitment()
-            print("Finished recursive verify; now comparing original P: ",
-                  binascii.hexlify(P))
-            print("..with calculated P': ", binascii.hexlify(Pprime))
+            #print("Finished recursive verify; now comparing original P: ",
+            #      binascii.hexlify(P))
+            #print("..with calculated P': ", binascii.hexlify(Pprime))
             return P == Pprime
         x, xb, x_sq, x_sqb, xinv, xinvb, x_sq_inv, x_sq_invb = self.fiat_shamir(
                     L[self.verif_iter], R[self.verif_iter], P)        
