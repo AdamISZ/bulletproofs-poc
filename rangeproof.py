@@ -243,21 +243,39 @@ def run_test_rangeproof(value, rangebits):
     if not (0 < value and value < 2**rangebits):
         print("Value is NOT in range; we want verification to FAIL.")
         fail = True
+        #To attempt to forge a rangeproof for a not-in-range value,
+        #we'll do the following: make a *valid* proof for the truncated
+        #bits of our overflowed value, and then apply a V pedersen commitment
+        #to our actual value, which will (should!) fail.
+        #Obviously, there are a near-infinite number of ways to create
+        #invalid proofs, TODO look into others.
+        proofval = value & (2**rangebits -1)
+        print("Using truncated bits, value: ", proofval, " to create fake proof.")
+    else:
+        proofval = value
     rp = RangeProof(rangebits)
-    rp.generate_proof(value)
+    rp.generate_proof(proofval)
     proof = rp.get_proof_serialized()
     #now simulating: the serialized proof passed to the validator/receiver;
     #note that it is tacitly assumed that in the expected application (CT
     #or similar), the V value is a pedersen commitment which already exists
     #in the transaction; it's what we're validating *against*, so it's not
-    #part of the proof itself. Hence we just pass rp.V into the verify call.
+    #part of the proof itself. Hence we just pass rp.V into the verify call,
+    #for the case of valid rangeproofs.
     print("Got rangeproof: ", binascii.hexlify(proof))
     print("Its length is: ", len(proof))
     #Note this is a new RangeProof object:
     rp2 = RangeProof(rangebits)
     A, S, T1, T2, tau_x, mu, t, iproof = rp2.deserialize_proof(proof)
     print("Now attempting to verify a proof in range: 0 -", 2**rangebits)
-    if not rp2.verify(A, S, T1, T2, tau_x, mu, t, iproof, rp.V):
+    if fail:
+        #As mentioned in comments above, here create a Pedersen commitment
+        #to our actual value, which is out of range, with the same blinding
+        #value.
+        Varg = PC(encode(value, 256, minlen=32), blinding=rp.gamma).get_commitment()
+    else:
+        Varg = rp.V
+    if not rp2.verify(A, S, T1, T2, tau_x, mu, t, iproof, Varg):
         if not fail:
             print('Rangeproof should have verified but is invalid; bug.')
         else:

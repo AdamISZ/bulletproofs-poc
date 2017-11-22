@@ -108,6 +108,7 @@ class Vector(object):
             self.bitstring = bin(v)[2:]
             self.v = [int(x) for x in self.bitstring]
             if bitlength:
+                assert bitlength >= len(self.v)
                 self.v = [0]*(bitlength - len(self.v)) + self.v
                 self.bitstring = "0" * (bitlength - len(self.v)) + self.bitstring
             self.v = self.v[::-1]
