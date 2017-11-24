@@ -121,35 +121,35 @@ class VPC(object):
         return self.P
 
 
-def verify_opening(commitment, r, v, w, vtype="bin"):
+def verify_opening(commitment, c, a, b, vtype="bin"):
     """Given a previously supplied commitment commitment,
-    verify that it opens correctly to rH + <v><G>
+    verify that it opens correctly to cU + a*G* + b*H*
     """
-    tempVPC = VPC(v, w, vtype=vtype)
-    tempVPC.set_blinding(r=r)
-    c = tempVPC.get_commitment()
-    return c == commitment
+    tempVPC = VPC(a, b, vtype=vtype)
+    tempVPC.set_blinding(c=c)
+    comm = tempVPC.get_commitment()
+    return comm == commitment
 
 def run_test_VPC():
     rawv = raw_input("Enter a vector cseparated: ")
     v = [int(x) for x in rawv.split(',')]
-    vpc = VPC(v, vtype="int")
+    vpc = VPC(v, v, vtype="int")
     print("Successfully created the pedersen commitment to: ", rawv)
     C = vpc.get_commitment()
     print("Here is the commitment: ", binascii.hexlify(C))
     rawv2 = raw_input("Test homomorphism: enter second vector: ")
     v2 = [int(x) for x in rawv2.split(',')]
-    vpc2 = VPC(v2, vtype="int")
+    vpc2 = VPC(v2, v2, vtype="int")
     C2 = vpc2.get_commitment()
     print("Here is the commitment for the second vector: ", binascii.hexlify(C2))
     assert len(v2) == len(v), "try again"
     sumv = [x + y for x, y in zip(v, v2)]
     print('here is sumv: ', sumv)
-    newr = encode((decode(vpc.r, 256) + decode(vpc2.r, 256))%N, 256, 32)
-    print("here is newr len: ", len(newr))
-    sumvpc = VPC(sumv, vtype="int")
+    newc = encode((decode(vpc.c, 256) + decode(vpc2.c, 256))%N, 256, 32)
+    print("here is newc len: ", len(newc))
+    sumvpc = VPC(sumv, sumv, vtype="int")
     #reset the blinding value
-    sumvpc.set_blinding(r=newr)
+    sumvpc.set_blinding(c=newc)
     Csum = sumvpc.get_commitment()
     print("Here is the commitment to the sum: ", binascii.hexlify(Csum))
     print("Here is the sum of C and C2: ", binascii.hexlify(ecadd_pubkeys([C, C2], False)))
@@ -159,11 +159,11 @@ def run_test_VPC():
         print("Homomorphism failed to verify.")
         exit(0)
     #test out opening commitments
-    if not verify_opening(C, vpc.r, v, vtype="int"):
+    if not verify_opening(C, vpc.c, v, v, vtype="int"):
         print("V1 did not verify")
-    if not verify_opening(C2, vpc2.r, v2, vtype="int"):
+    if not verify_opening(C2, vpc2.c, v2, v2, vtype="int"):
         print("V2 did not verify")
-    if not verify_opening(Csum, sumvpc.r, sumv, vtype="int"):
+    if not verify_opening(Csum, sumvpc.c, sumv, sumv, vtype="int"):
         print("Vsum did not verify")
 
 if __name__ == "__main__":
