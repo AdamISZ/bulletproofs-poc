@@ -72,6 +72,7 @@ scalar multiply (`ecmult`) and point addition (`ec_add_pubkeys`), into the
 ```
 git clone https://github.com/Joinmarket-Org/joinmarket-clientserver
 cd joinmarket-clientserver
+git checkout a612ddba72e8f79fff6fbc681c348172fdaa6544
 ./install.sh
 ```
 
